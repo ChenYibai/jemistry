@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>反应模拟器 | 有J化学</title>
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+</head>
+
+<body>
+  <div class="container">
+    <h1 class="mt-4 mb-3">反应模拟器</h1>
+    输入反应物：<input id="in1"> + <input id="in2">
+    <button onclick="react(1)" class="btn btn-primary">反应</button>
+    <button onclick="react(2)" class="btn btn-info">Ⅱ型反应</button><br>
+    反应方程式：<span id="out1">$\ce{? + ? = ?}$</span><br>
+    生成物解释：<span id="out2">?</span><br>
+    注1：若反应物只有一种，请留空第二个输入框。<br>
+    注2：若生成物解释中有?，说明无法确定该反应能否发生，请咨询相关人士。
+  </div>
+  <script src="jquery-3.3.1.min.js"></script>
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      }
+    };
+  </script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script src="bootstrap.bundle.min.js"></script>
+  <script>
+    var atm = [["Clavicle", "ICl2J3"], ["Dirt", "IJ3"], ["Apple", "P2J3"],
+    ["贾气", "J2"], ["Allen", "AlNJ2"], ["Calleymar", "AlCJ6"], ["Calleymarbri", "AlICJ8"],
+    ["Chess", "S2CHJ"], ["Jason", "SNOJ2"], ["Michael", "ICHJ4"], ["Michelle", "ICHJ5"],
+    ["Wanque", "NJ5"], ["Maxyellow", "OJ8"],
+    ["氯气", "Cl2"], ["乙炔", "C2H2"], ["氧气", "O2"], ["四氮化四硫", "S4N4"]];
+
+    function isDigit(c) {
+      return c >= "0" && c <= "9";
+    }
+    function isLower(c) {
+      return c >= "a" && c <= "z";
+    }
+    function isUpper(c) {
+      return c >= "A" && c <= "Z";
+    }
+    function strHash(str) {
+      // 1315423911 = (1001110011001111100011010100111)_2
+      var hash = 1315423911, i, ch;
+      for (i = str.length - 1; i >= 0; i--) {
+        ch = str.charCodeAt(i);
+        hash ^= ((hash << 5) + ch + (hash >> 2));
+      }
+      return (hash & 0x7FFFFFFF);
+    }
+    function gcd(a, b) {
+      return b == 0 ? a : gcd(b, a % b);
+    }
+    function f2q(x) { // Float to quotient
+      for (var j = 1; j < 1048576; j++) {
+        if (Math.abs(x * j - Math.round(x * j)) <= 0.00001)
+          return [Math.round(x * j), j];
+      }
+    }
+    function maxN(a, b) { // max number of `a` included in `b`
+      var res = 1e9;
+      for (var item of a) {
+        if (!b.has(item[0])) return 0;
+        res = Math.min(res, b.get(item[0]) / item[1]);
+      }
+      return (res == 1e9 ? 0 : res);
+    }
+    function coeff(x, str) {
+      return (str == "" ? "" : (x > 1 ? (x + str) : (x == 1 ? str : "")));
+    }
+
+    var Chem = {
+      parse: function (str0) {
+        var str = str0 + "J";
+        var res = new Map(), cur = "", num = 0;
+        for (var i = 0; i < str.length; i++) {
+          if (isDigit(str[i])) num = num * 10 + Number(str[i]);
+          else if (isUpper(str[i])) {
+            if (i > 0) {
+              if (res.has(cur))
+                res.set(cur, res.get(cur) + Math.max(1, num));
+              else res.set(cur, Math.max(1, num));
+            }
+            num = 0, cur = str[i];
+          }
+          else if (isLower(str[i])) cur += str[i];
+        }
+        return res;
+      },
+      form: function (m) {
+        var res = "";
+        for (var j of m) {
+          if (j[1] > 0) {
+            res += j[0];
+            if (j[1] > 1) res += j[1];
+          }
+        }
+        return res;
+      },
+      stability: function (m) {
+        var res = 0, n = 0;
+        for (var item of m) {
+          if (item[1] == 0) m.delete(item[0]);
+          res += item[1] * (strHash(item[0]) % 1000);
+          n += item[1];
+        }
+        return Math.round(res / n * Math.sqrt(m.size));
+      },
+      prepare: function () {
+        // [0]Name [1]Formula [2]Parsed map [3]Stability
+        for (var i in atm) {
+          atm[i].push(Chem.parse(atm[i][1]));
+          atm[i].push(Chem.stability(atm[i][2]));
+        }
+        atm.sort((a, b) => (a[3] < b[3]));
+      }
+    };
+
+    function sim(x, y, type) {
+      // Get the mixture
+      var t = new Map();
+      for (var item of x) t.set(item[0], item[1]);
+      for (var item of y) {
+        if (t.has(item[0])) t.set(item[0], t.get(item[0]) + item[1]);
+        else t.set(item[0], item[1]);
+      }
+      if (!t.has("J") || t.get("J") <= 0) return ["不是有J反应", "?"];
+      // Compute the product
+      var res = [];
+      atm.push(["", Chem.form(x), x, 0]);
+      atm.push(["", Chem.form(y), y, 0]);
+      var xDiscount = 0, yDiscount = 0;
+      for (var item of atm) {
+        var n = maxN(item[2], t);
+        if (type == 2 && (item[1] == Chem.form(x) || item[1] == Chem.form(y)))
+          continue;
+        if (n > 0) {
+          for (var jtem of item[2])
+            t.set(jtem[0], t.get(jtem[0]) - jtem[1] * n);
+          if (item[1] == Chem.form(x))
+            xDiscount += n;
+          else if (item[1] == Chem.form(y))
+            yDiscount += n;
+          else res.push([item[0], item[1], n]);
+        }
+      }
+      // Balance
+      var factor = 1;
+      for (var item of res) {
+        var denom = f2q(item[2])[1];
+        factor = factor / gcd(factor, denom) * denom;
+      }
+      for (var item of [xDiscount, yDiscount]) {
+        var denom = f2q(item)[1];
+        factor = factor / gcd(factor, denom) * denom;
+      }
+      for (var item of res) {
+        item[2] = Math.round(item[2] * factor);
+      }
+      // Remainder
+      for (var item of t.keys())
+        t.set(item, Math.round(t.get(item) * factor));
+      if (Chem.form(t) != "")
+        res.push(["?", Chem.form(t), 1]);
+      // Output equation
+      atm.pop(), atm.pop();
+      var output = "";
+      var xcoeff = Math.round((1 - xDiscount) * factor),
+        ycoeff = Math.round((1 - yDiscount) * factor);
+      if (xcoeff < 0) res.push(["?", Chem.form(x), -xcoeff]), xcoeff = 0;
+      if (ycoeff < 0) res.push(["?", Chem.form(y), -ycoeff]), ycoeff = 0;
+      output += coeff(xcoeff, Chem.form(x));
+      if (xcoeff * ycoeff > 0 && Chem.form(x) != "" && Chem.form(y) != "")
+        output += " + ";
+      output += coeff(ycoeff, Chem.form(y));
+      output += " = ";
+      for (var item of res)
+        output += coeff(item[2], item[1]) + " + ";
+      output = output.slice(0, output.length - 3);
+      if (output != "") output = "$\\ce{" + output + "}$";
+      else output = "不会发生反应";
+      // Output explanation
+      var explanation = "";
+      for (var item of res)
+        explanation += item[0] + " + ";
+      explanation = explanation.slice(0, Math.max(0, explanation.length - 3));
+      // Check for impossible reaction
+      if (!(x.has("J") && xcoeff > 0 || y.has("J") && ycoeff > 0))
+        output = "不会发生反应", explanation = "";
+      // Return result
+      return [output, explanation];
+    }
+
+    function react(type) {
+      var x1 = $("#in1").val(), x2 = $("#in2").val();
+      var res = sim(Chem.parse(x1), Chem.parse(x2), type);
+      $("#out1").html(res[0]);
+      $("#out2").html(res[1]);
+      MathJax.typeset();
+    }
+
+    Chem.prepare();
+  </script>
+</body>
+
+</html>
