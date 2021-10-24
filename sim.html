@@ -38,7 +38,8 @@
     ["贾气", "J2"], ["Allen", "AlNJ2"], ["Calleymar", "AlCJ6"], ["Calleymarbri", "AlICJ8"],
     ["Chess", "S2CHJ"], ["Jason", "SNOJ2"], ["Michael", "ICHJ4"], ["Michelle", "ICHJ5"],
     ["Wanque", "NJ5"], ["Maxyellow", "OJ8"],
-    ["氯气", "Cl2"], ["乙炔", "C2H2"], ["氧气", "O2"], ["四氮化四硫", "S4N4"]];
+    ["氯气", "Cl2"], ["乙炔", "C2H2"], ["氧气", "O2"], ["四氮化四硫", "S4N4"],
+    ["红磷", "P"]];
 
     function isDigit(c) {
       return c >= "0" && c <= "9";
@@ -122,7 +123,7 @@
           atm[i].push(Chem.parse(atm[i][1]));
           atm[i].push(Chem.stability(atm[i][2]));
         }
-        atm.sort((a, b) => (a[3] < b[3]));
+        atm.sort((a, b) => (b[3] - a[3]));
       }
     };
 
